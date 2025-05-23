@@ -10,3 +10,5 @@ git clone https://github.com/Gafret/Moonly.git
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 langgraph dev```
+
+- I am going to invalidate my API key, don't worry)
