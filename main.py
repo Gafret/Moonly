@@ -1,9 +1,7 @@
-from typing import Literal
-
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import RemoveMessage, HumanMessage, SystemMessage
-from langgraph.constants import START, END
+from langgraph.constants import START
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -81,6 +79,6 @@ builder.add_edge(START, "turn_counter")
 builder.add_edge("turn_counter", "summarize_conversation")
 builder.add_edge("summarize_conversation", "agent")
 builder.add_conditional_edges("agent", tools_condition)
-builder.add_edge("tools", "summarize_conversation")
+builder.add_edge("tools", "agent")
 
 graph = builder.compile()
