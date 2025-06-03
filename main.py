@@ -1,45 +1,15 @@
-import datetime
-from zoneinfo import ZoneInfo
+from typing import Literal
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import RemoveMessage, HumanMessage, SystemMessage
-from langchain_core.tools import tool
 from langgraph.constants import START, END
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from tools import get_current_time, recommend_refreshment
+
 load_dotenv()
-
-
-@tool(parse_docstring=True)
-def get_current_time() -> dict:
-    """Returns 'utc_time', 'local_time', 'utc_hour', 'local_hour'."""
-
-    local = datetime.datetime.now(tz=ZoneInfo("Europe/Amsterdam"))
-    utc = datetime.datetime.now(datetime.timezone.utc)
-
-    return {
-        "utc_time": str(utc),
-        "utc_hour": utc.hour,
-        "local": str(local),
-        "local_hour": local.hour,
-    }
-
-
-@tool(parse_docstring=True)
-def recommend_refreshment(local_hour: int) -> dict:
-    """Given 'local_hour' suggests what user should eat and drink.
-
-    Args:
-        local_hour: local hour.
-    """
-
-    if local_hour < 17:
-        return {"drink": "coffee", "snack": "cookies"}
-    else:
-        return {"drink": "kefir", "snack": "cookies"}
-
 
 AGENT_PROMPT = """
     You are a helpful assistant, 
@@ -50,6 +20,7 @@ AGENT_PROMPT = """
 
 class CustomState(MessagesState):
     summary: str
+    turns: int
 
 
 model = init_chat_model(model="google_genai:gemini-2.0-flash")
@@ -57,13 +28,9 @@ model_with_tools = model.bind_tools([get_current_time, recommend_refreshment])
 
 
 def summarize_conversation(state: CustomState):
-    messages = state["messages"]
+    turns = state.get("turns", 0)
 
-    # not really elegant to check condition in node itself,
-    # but it makes more sense than adding conditional edge that leads to
-    # summarizer and agent, because we would need to check message history anyway in summarizer
-    # node so we do not summarize just one message
-    if len(messages) > 5:
+    if turns >= 5:
         summary = state.get("summary")
 
         if summary is not None:
@@ -78,8 +45,8 @@ def summarize_conversation(state: CustomState):
         messages = state["messages"] + [HumanMessage(content=summary_message)]
         response = model.invoke(messages)
 
-        delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
-        return {"summary": response.content, "messages": delete_messages}
+        delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-1]]
+        return {"summary": response.content, "messages": delete_messages, "turns": 0}
 
 
 def call_model(state: CustomState):
@@ -96,14 +63,22 @@ def call_model(state: CustomState):
     return {"messages": response}
 
 
+def turn_counter(state: CustomState):
+    turns = state.get("turns", 0) + 1
+
+    return {"turns": turns}
+
+
 tools = ToolNode(tools=[get_current_time, recommend_refreshment])
 builder = StateGraph(CustomState)
 
 builder.add_node("agent", call_model)
 builder.add_node("summarize_conversation", summarize_conversation)
 builder.add_node("tools", tools)
+builder.add_node("turn_counter", turn_counter)
 
-builder.add_edge(START, "summarize_conversation")
+builder.add_edge(START, "turn_counter")
+builder.add_edge("turn_counter", "summarize_conversation")
 builder.add_edge("summarize_conversation", "agent")
 builder.add_conditional_edges("agent", tools_condition)
 builder.add_edge("tools", "summarize_conversation")
