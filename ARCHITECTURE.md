@@ -1,7 +1,7 @@
 # Architecture 
 ## Overview
 Basically, current architecture is just slightly modified ReAct graph that uses
-summarization and turn counter to decide when clear message history
+summarization and turn counter to decide when to clear message history
 
 ## Graph
 ![Graph](/images/graph.png "Graph")
