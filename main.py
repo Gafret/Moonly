@@ -44,7 +44,7 @@ def summarize_conversation(state: CustomState):
         response = model.invoke(messages)
 
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-1]]
-        return {"summary": response.content, "messages": delete_messages, "turns": 0}
+        return {"summary": response.content, "messages": delete_messages, "turns": 1}
 
 
 def call_model(state: CustomState):
